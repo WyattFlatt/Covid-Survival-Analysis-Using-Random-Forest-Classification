@@ -1,4 +1,4 @@
-Covid Survival Analysis Using Random Forest Classification
+# Covid Survival Analysis Using Random Forest Classification
 
 ## Overview
 
@@ -54,11 +54,16 @@ created: one optimized for accuracy and one optimized for sensitivity.
 ## Results
 The Random Forest classification framework demonstrated very strong predictive
 capabilities in identifying COVID-19 survival outcomes using structured
-clinical and demographic data.
+clinical and demographic data. The accuracy-optimized model achieved an accuracy of 
+87.39 percent and sensitivity of 95.92 percent, and the sensitivity-optimized model 
+achieved an accuracy of 86.99 percent and a sensitivity of 96.30 percent. This means that 
+both models were able to accurately predict patients' death statuses with high accuracy while performing
+even better on patients who did not survive, making them highly appropriate for
+a healthcare-style setting in which those who will die are of higher priority.
 
 Conditional probability and feature importance analysis highlighted meaningful relationships between
 mortality risk and patient characteristics such as hospitalization status,
-ICU admission, and demographic variables.
+ICU admission, and demographic variables, indicating potential risk factors.
 
 
 ## Technologies
@@ -76,6 +81,7 @@ ICU admission, and demographic variables.
 ## Structure
 - covid_survival_analysis.Rmd - Main analysis and modeling code
 - Covid Survival Analysis.pdf - Final analysis report
+- Requirements.txt - R dependencies
 
 ## Notes
 This project was completed as part of a machine learning and predictive
