@@ -1,0 +1,391 @@
+---
+title: "Covid"
+output: pdf_document
+date: "2026-03-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Preparation
+
+
+```{r, warning=FALSE, message=FALSE}
+# Loading dependencies
+library(sqldf)
+library(tidyverse)
+library(caret)
+library(randomForest)
+library(rsample)
+library(stringr)
+library(ranger)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Loading data set
+covid <- read.csv("covid.csv")
+```
+
+```{r}
+# Setting a seed for reproducibility
+set.seed(0)
+```
+
+
+# Exploratory Data Analysis and Preprocessing
+
+
+```{r}
+# Custom function to generate a table including NA counts
+create_table_with_na <- function(x) {
+  tbl <- table(x, useNA = "always")
+  return(tbl)
+}
+
+# Applying function to all variables
+result_tables <- apply(covid, MARGIN = 2, FUN = create_table_with_na)
+
+print(result_tables)
+```
+
+
+```{r}
+# Removing features with large amounts of empty observations
+covid <- sqldf("SELECT covid.age_group, covid.sex, covid.race, covid.ethnicity,
+               covid.current_status, covid.symptom_status, covid.hosp_yn, covid.icu_yn,
+               covid.death_yn
+               FROM covid
+               WHERE covid.death_yn = 'Yes'
+               OR covid.death_yn = 'No'")
+```
+
+
+```{r}
+# Creating a list to hold conditional probabilities
+prop_results <- list()
+
+# Looping through variables
+for (var in names(covid)) {
+  # For any variable that is not the target, we continue
+  if (var != "death_yn") {
+    # Collecting the conditional probability
+    tab <- table(covid[[var]], covid$death_yn)
+    prop_results[[var]] <- prop.table(tab, margin = 1)
+  }
+}
+```
+
+```{r}
+# Loop through feature names using lapply
+condprob_list <- lapply(names(prop_results), function(var) {
+  
+  # Create a data frame out of the conditional probabilities and categories
+  df <- as.data.frame(prop_results[[var]])
+  
+  # Name data frame columns for eas of use
+  colnames(df) <- c("category", "death_yn", "prob")
+  
+  # Populating a column with the name of the variable
+  df$feature <- var
+  
+  # Keeping only the conditional probability of death = true given the variables
+  df <- df[df$death_yn == "Yes", ]
+  
+  return(df)
+})
+
+# Combining individual feature conditional prob data frames into one
+condprob_data <- do.call(rbind, condprob_list)
+```
+
+
+```{r, fig.height=14, fig.width=12}
+# Graphing all conditional probabilities of death given each feature categories
+cond_graph <- ggplot(condprob_data, aes(x = category, y = prob)) +
+  geom_bar(fill = "purple", color = "black", stat = "identity") +   # Creating bars
+  facet_wrap(~ feature, scales = "free_x", ncol = 2) + # Creating plot for each feature
+  theme_minimal() +
+  labs(title = "Probability of Death Conditional on Features",
+       y = "P(Death = Yes | Category)",
+       x = "Category") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), 
+        plot.title = element_text(face = "bold", size = 15, hjust = .5))
+
+cond_graph
+```
+
+
+```{r}
+# Creating a copy of covid that will be cleaned using the for loop
+covid_clean <- covid
+
+# Preprocessing data
+for (var in colnames(covid_clean)){
+  
+  # Handling response preprocessing
+  if(var == "death_yn"){
+    # Turing response into a factor
+    covid_clean[[var]] = as.factor(covid_clean[[var]])
+    # Skipping preprocessing for response
+    next
+  }
+  
+  # Handling mode imputation for age_group
+  if (var == "age_group"){
+    # Collect age_group vector 
+    v <- covid_clean[[var]]
+    # Collecting age_group vector without NAs
+    v_nona <- na.omit(v)
+    # Getting most common age_group for mode
+    mode <- names(sort(table(v_nona), decreasing = TRUE))[1]
+    # Replacing values with mode
+    v[is.na(v) | v == "Missing"] <- mode
+    # Replacing original values with updated vector
+    covid_clean[[var]] <- as.factor(v)
+  
+  # Preprocessing other variables  
+  } else {
+    # Turning NAs into Missings
+    covid_clean[[var]][is.na(covid_clean[[var]])] <- "Missing"
+    # Changing variables into factors
+    covid_clean[[var]] <- as.factor(covid_clean[[var]])
+  }
+}
+```
+
+```{r}
+# Ensuring no NAs remain
+sum(is.na(covid_clean))
+```
+
+```{r}
+# Showing the size of the data
+nrow(covid_clean)
+```
+
+```{r}
+# Showing class imbalance
+imbalance <- data.frame(table(covid_clean$death_yn))
+colnames(imbalance) <- c("Death Status", "Frequency")
+imbalance
+```
+
+```{r}
+# Showing ratio of imbalance
+round(imbalance[1,2]/imbalance[2,2],1)
+```
+
+```{r}
+# Initially splitting data to ensure no overlap and maintain test class imbalance
+split <- initial_split(covid_clean, prop = 0.99, strata = death_yn)
+train <- training(split)
+test  <- testing(split)
+```
+
+```{r}
+# Showing the distribution of the death status in 1 percent test data
+table(test$death_yn)
+```
+
+```{r}
+# Creating a data set for the majority class
+majority <- train %>%
+  filter(death_yn == "No")
+
+# Creating a data set for the minority class
+minority <- train %>%
+  filter(death_yn == "Yes")
+
+# Gathering undersampling indices to be taken from classes
+under_inds_maj <- sample(1:nrow(majority), 50000, replace = FALSE)
+under_inds_min <- sample(1:nrow(minority), 50000, replace = FALSE)
+
+# Creating the undersampled datasets
+majority_undersamp <- majority[under_inds_maj, ]
+minority_undersamp <- minority[under_inds_min, ]
+
+# Creating the combined, balanced data set
+covid_use <- rbind(minority_undersamp, majority_undersamp)
+```
+
+```{r}
+# Ensuring levels are in the correct order for sensitivity maximizations
+covid_use$death_yn <- factor(covid_use$death_yn, levels = c("Yes", "No"))
+
+levels(covid_use$death_yn)
+```
+
+
+# Models
+
+
+### Naive Model
+
+```{r}
+# Classifying all test observations as No
+test$naivepred <- "No"
+confusionMatrix(as.factor(test$naivepred), as.factor(test$death_yn), positive = "Yes")
+```
+
+### Accuracy based model
+
+```{r}
+set.seed(0)
+
+# Creating a model with a set grid
+param_grid  = expand.grid(mtry = c(3,5,7,9,11,14,27),
+                          splitrule = c("gini"),
+                          min.node.size = 1)
+
+# Creating set folds for reproducibility
+folds <- createFolds(covid_use$death_yn, k = 5, returnTrain = TRUE)
+
+# 5-fold cross validation object
+ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  index = folds
+)
+
+# Creating random forest model using cross validation
+rf_model <- train(
+  death_yn ~ .,
+  data = covid_use,
+  method = "ranger",
+  tuneGrid = param_grid,
+  trControl = ctrl
+)
+```
+
+```{r}
+# Showing model information
+rf_model$bestTune
+```
+
+```{r}
+# Showing model information
+rf_model$results
+```
+
+```{r}
+# Getting predictions
+rf_preds <- predict(rf_model, test)
+
+# Getting confusion matrix
+acc_confusion <- confusionMatrix(as.factor(rf_preds), test$death_yn, positive = "Yes")
+acc_confusion 
+```
+
+```{r}
+# Creating confusion matrix data frame
+cm_acc <- as.data.frame(acc_confusion$table)
+
+# Renaming column
+colnames(cm_acc)[3] <- "Frequency"
+
+# Graphing confusion matrix heatmap
+ggplot(cm_acc, aes(x = Reference, y = Prediction, fill = Frequency)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = format(Frequency, big.mark = ",", scientific = FALSE)), size = 6) +
+  scale_fill_gradient(low = "yellow", high = "red", labels = function(x) format(x, scientific = FALSE, big.mark = ",")) +
+  theme_minimal() +
+  labs(x = "Actual",
+       y = "Predicted") +
+  theme(
+    axis.text = element_text(size = 14),  
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16)
+  )
+```
+
+### Sensitivity based model
+
+```{r}
+# Creating random forest model using cross validation to maximize sensitivity
+ctrl_sens <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary # ensures that sensitivity is calculated in each fold
+)
+
+# Random forest model with set grid of parameters
+rf_sens_par_model <- train(
+  death_yn ~ .,
+  data = covid_use,
+  method = "ranger",
+  metric = "Sens",
+  tuneGrid = param_grid,
+  trControl = ctrl_sens,
+  importance = 'permutation'
+)
+```
+
+```{r}
+# Showing model information
+rf_sens_par_model$bestTune
+```
+
+```{r}
+# Showing model information
+rf_sens_par_model$results
+```
+
+```{r}
+# Getting predictions
+rf_sens_par_preds <- predict(rf_sens_par_model, test)
+
+# Getting confusion matrix
+sens_confusion <- confusionMatrix(as.factor(rf_sens_par_preds), test$death_yn, positive = "Yes")
+sens_confusion
+```
+
+```{r}
+# Creating confusion matrix data frame
+cm_sens <- as.data.frame(sens_confusion$table)
+
+# Renaming column
+colnames(cm_sens)[3] <- "Frequency"
+
+# Graphing confusion matrix heatmap
+ggplot(cm_sens, aes(x = Reference, y = Prediction, fill = Frequency)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = format(Frequency, big.mark = ",", scientific = FALSE)), size = 6) +
+  scale_fill_gradient(low = "yellow", high = "red", labels = function(x) format(x, scientific = FALSE, big.mark = ",")) +
+  theme_minimal() +
+  labs(x = "Actual",
+       y = "Predicted") +
+  theme(
+    axis.text = element_text(size = 14),  
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16)
+  )
+```
+
+### Feature importances
+
+```{r}
+# Collecting permutation feature importance scores
+imps <- data.frame(importance = rf_sens_par_model$finalModel$variable.importance) %>%
+  arrange(-importance)
+
+# Collection feature-category name combinations for plotting
+names <- str_replace(row.names(imps), "([a-z])([A-Z0-9])", "\\1: \\2")
+imps$features <- names
+
+# Graphing feature importance scores
+ggplot(data = imps, aes(x = importance, y = reorder(features, importance))) +
+  geom_bar(stat = "identity", fill = "purple", color = "black") +
+  theme_minimal() +
+  labs(y = "Feature: Category",
+       x = "Importance") +
+  theme(
+    axis.text = element_text(size = 14),  
+    axis.title = element_text(size = 16)
+  )
+```
+
