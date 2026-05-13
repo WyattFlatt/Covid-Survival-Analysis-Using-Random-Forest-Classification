@@ -1,61 +1,84 @@
-# House Price Estimation Using Gradient Boosting
-
+Covid Survival Analysis Using Random Forest Classification
 
 ## Overview
-This project applies a gradient boosting framework to estimate residential
-house prices using structured housing data as a part of a Kaggle competition. 
-Cross-validation hyperparameter tuning was used to choose a Gradient Boosting Regression model
+
+This project applies a Random Forest classification framework to predict
+COVID-19 patient survival outcomes using demographic and clinical data.
+The analysis focuses on identifying relationships between patient characteristics
+and mortality outcomes while evaluating the predictive performance of ensemble
+machine learning methods.
 
 In addition to predictive modeling, the project includes exploratory data
-analysis, feature engineering, and preprocessing pipelines to improve model reliability and interpretability.
+analysis, conditional probability analysis, preprocessing, and
+feature preparation techniques to improve model reliability and interpretability.
 
 ## Dataset
-The dataset consists of residential housing features such as property size,
-location-related variables, structural characteristics, and other attributes
-commonly associated with home valuation from homes in Ames, Iowa.
 
+The dataset consists of COVID-19 patient records reported to the Centers for Disease Control and Prevention
+from across the United States and it contains demographic,
+hospitalization, and symptom-related variables. Features used for analysis include:
+
+- age group
+- sex
+- race
+- ethnicity
+- hospitalization status
+- ICU status
+- symptom status
+- current case status
+- death status
+
+Observations with confirmed survival outcomes were retained for analysis,
+and missing values were handled through preprocessing and imputation methods.
+
+🔗 **View Data:**
+https://data.cdc.gov/Case-Surveillance/COVID-19-Case-Surveillance-Public-Use-Data-with-Ge/n8mc-b4w4/about_data
 
 ## Methods
+
 - Exploratory data analysis (EDA)
+- Conditional probability analysis
 - Data preprocessing and cleaning
-- Feature engineering and transformation
-- Pipeline imputation and feature encoding
-- Train/test splitting
-- Cross-validation
-- Hyperparameter tuning
-- Regression modeling
+- Missing value handling and mode imputation
+- Feature encoding using categorical factors
+- Stratified train/test splitting
+- Random Forest classification
+- Model evaluation and prediction analysis
 
 ## Models
-- **Gradient Boosting Regressor:** Used as the primary predictive model framework to
-improve estimation accuracy and capture complex feature interactions
-- **Stochastic Gradient Boosting Regressor:** A gradient boosting regressor variant
-used to further reduce overfitting
+- **Random Forest Classifier:** Used as the primary ensemble learning model to
+capture nonlinear relationships and interactions between demographic and
+clinical variables associated with COVID-19 mortality risk. Two cross-validation classifiers were
+created: one optimized for accuracy and one optimized for sensitivity.
 
 ## Results
-A Stochastic Gradient Boosting Regressor was chosen as the RMSE-minimizing model via cross-validation.
-This model was used to predict the sales prices of houses in the testing data provided by the
-Kaggle competition. The result was an RMSE of .12859 between the log of prediction prices
-and the log of the true observed prices, resulting in a relatively good competition placement.
+The Random Forest classification framework demonstrated very strong predictive
+capabilities in identifying COVID-19 survival outcomes using structured
+clinical and demographic data.
 
-The project highlights how ensemble learning methods can effectively model
-house pricing behavior using structured tabular data.
+Conditional probability and feature importance analysis highlighted meaningful relationships between
+mortality risk and patient characteristics such as hospitalization status,
+ICU admission, and demographic variables.
+
 
 ## Technologies
-- Python
-- NumPy
-- Pandas
-- Scikit-learn
-- Matplotlib
-- Seaborn
-- Jupyter Notebook
+- R
+- tidyverse
+- caret
+- randomForest
+- ranger
+- ggplot2
+- sqldf
+- rsample
+- stringr
+- R Markdown
 
 ## Structure
-- House_Price_Estimation.ipynb - Main analysis and results notebook
-- House Price Estimation.pdf - Analysis report
-- Requirements.txt - Python dependencies
+- covid_survival_analysis.Rmd - Main analysis and modeling code
+- Covid Survival Analysis.pdf - Final analysis report
 
 ## Notes
-This project was completed as part of a machine learning project and is
-accompanied by a paper discussing the methodology, modeling
-approach, preprocessing decisions, and predictive performance results in
-greater detail.
+This project was completed as part of a machine learning and predictive
+analytics study and is accompanied by a research paper discussing the
+methodology, preprocessing decisions, exploratory analysis, and predictive
+modeling results in greater detail.
